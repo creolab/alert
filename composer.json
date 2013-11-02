@@ -1,0 +1,21 @@
+{
+    "name": "creolab/alert",
+    "description": "Handle various application alerts",
+    "keywords": ["alert", "notification", "laravel"],
+    "authors": [
+        {
+            "name": "Boris Strahija",
+            "email": "boris@creolab.hr"
+        }
+    ],
+    "require": {
+        "php": ">=5.3.0",
+        "illuminate/support": "4.0.x"
+    },
+    "autoload": {
+        "psr-0": {
+            "Creolab\\Alert": "src/"
+        }
+    },
+    "minimum-stability": "dev"
+}
