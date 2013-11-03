@@ -110,6 +110,24 @@ class Environment {
 	}
 
 	/**
+	 * Add new success alert
+	 * @param string $message
+	 */
+	public function addSuccess($message)
+	{
+		return $this->add($message, 'success');
+	}
+
+	/**
+	 * Add new warning alert
+	 * @param string $message
+	 */
+	public function addWarning($message)
+	{
+		return $this->add($message, 'warning');
+	}
+
+	/**
 	 * Show specific alert type
 	 * @param  string $type
 	 * @return string
