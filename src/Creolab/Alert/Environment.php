@@ -1,7 +1,8 @@
 <?php namespace Creolab\Alert;
 
-use Illuminate\Foundation\Application;
-use Illuminate\Support\Collection;
+use Illuminate\Support\MessageBag;
+use Illuminate\Session\SessionManager;
+use Illuminate\Config\Repository as Config;
 
 /**
  * The environment for the alerts
@@ -15,69 +16,43 @@ class Environment {
 	const SESSION_KEY = 'creolab_alerts';
 
 	/**
-	 * All collections
-	 * @var array
+	 * Alert bag
+	 * @var Illuminate\Support\MessageBag
 	 */
-	protected $collections = array();
+	protected $bag;
 
 	/**
-	 * IoC container
-	 * @var Illuminate\Foundation\Application
+	 * Session object
+	 * @var Illuminate\Session\SessionManager
 	 */
-	protected $app;
+	protected $session;
+
+	/**
+	 * Config object
+	 * @var Illuminate\Config\Repository
+	 */
+	protected $config;
 
 	/**
 	 * Initialize alert environment
-	 * @param Application $app [description]
+	 * @param Application $app
 	 */
-	public function __construct(Application $app)
+	public function __construct(SessionManager $session, Config $config)
 	{
-		$this->app = $app;
+		$this->session = $session;
+		$this->config = $config;
 
 		// Get all notifications from the flash input
-		$this->getFlash();
-	}
-
-	/**
-	 * Get a collection of alerts
-	 * @param  string $name
-	 * @return AlertCollection
-	 */
-	public function collection($name)
-	{
-		if ($this->collectionExists($name))
-		{
-			return $this->collections[$name];
-		}
+		$this->getExisting();
 	}
 
 	/**
 	 * Return all collections
 	 * @return array
 	 */
-	public function collections()
+	public function bag()
 	{
-		return $this->collections;
-	}
-
-	/**
-	 * Create a new alert collections
-	 * @param  string $name
-	 * @return AlertCollections
-	 */
-	public function createCollection($name)
-	{
-		return $this->collections[$name] = new AlertCollection($this->app, $name);
-	}
-
-	/**
-	 * Check if a collection exists
-	 * @param  string $name
-	 * @return boolean
-	 */
-	public function collectionExists($name)
-	{
-		return isset($this->collections[$name]);
+		return $this->bag;
 	}
 
 	/**
@@ -87,14 +62,7 @@ class Environment {
 	 */
 	public function add($message, $type = 'info', $flash = true)
 	{
-		// Create collection if needed
-		if ( ! $this->collection($type))
-		{
-			$this->createCollection($type);
-		}
-
-		// And now add new alert item
-		$this->collection($type)->add($message);
+		$this->bag->add($type, $message);
 
 		// And write to flash
 		if ($flash) $this->setFlash();
@@ -132,48 +100,75 @@ class Environment {
 	 * @param  string $type
 	 * @return string
 	 */
-	function render($type = null)
+	public function render($type = null)
 	{
-		if ($type and $this->collectionExists($type))
+		if ($this->bag->any())
 		{
-			return $this->collection($type)->render();
-		}
-		elseif ( ! $type)
-		{
-			$all = '';
+			$output = '';
 
-			foreach ($this->collections as $collection)
+			foreach ($this->bag->getMessages() as $type => $messages)
 			{
-				$all .= $collection->render();
+				// Class for opening tag
+				$class = ($type == 'error') ? 'danger' : $type;
+
+				// Start collection
+				$output  .= $this->config->get('alert::collection_open', '<div class="alert alert-' . $class . '">') . PHP_EOL;
+
+				foreach ($messages as $message)
+				{
+					// Prepare output
+					$output .= $this->config->get('alert::alert_open', '<p>');
+					$output .= $message;
+					$output .= $this->config->get('alert::alert_close', '</p>');
+				}
+
+				// Close it
+				$output .= $this->config->get('alert::collection_close', '</div>') . PHP_EOL;
 			}
 
-			return $all;
+			return $output;
 		}
-
-		// Cleanup
-		$this->collections = array();
-		$this->app['session']->forget(self::SESSION_KEY);
 	}
 
 	/**
 	 * Get all alert from session flash
 	 * @return void
 	 */
-	public function getFlash()
+	public function getExisting()
 	{
-		$flash = $this->app['session']->get(self::SESSION_KEY);
+		// Create message bag
+		if ( ! $this->bag) $this->bag = new MessageBag();
+
+		// Get messges from flash
+		$flash = $this->session->get(self::SESSION_KEY);
 
 		if ($flash)
 		{
 			foreach ($flash as $type => $alerts)
 			{
-				if (count($alerts))
+				if (is_array($alerts) and count($alerts))
 				{
 					foreach ($alerts as $alert)
 					{
-						$this->add($alert['message'], $type, false);
+						$this->bag->add($type, $alert);
 					}
 				}
+			}
+		}
+
+		foreach (array('alert', 'alert_success', 'alert_error', 'alert_warning') as $key)
+		{
+			if ($message = $this->session->get($key))
+			{
+				// Get type
+				$type = trim(str_replace('alert', '', $key), '_');
+				if ( ! $type) $type = 'info';
+
+				// Add the message
+				$this->bag->add($type, $message);
+
+				// And remove from flash
+				$this->session->forget($key);
 			}
 		}
 	}
@@ -185,12 +180,15 @@ class Environment {
 	{
 		$flash = array();
 
-		foreach ($this->collections as $type => $collection)
+		foreach ($this->bag->getMessages() as $type => $messages)
 		{
-			$flash[$type] = $collection->toArray();
+			foreach ($messages as $message)
+			{
+				$flash[$type][] = $message;
+			}
 		}
 
-		$this->app['session']->flash(self::SESSION_KEY, $flash);
+		$this->session->flash(self::SESSION_KEY, $flash);
 	}
 
 }

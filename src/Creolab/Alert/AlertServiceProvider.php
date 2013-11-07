@@ -57,12 +57,7 @@ class AlertServiceProvider extends ServiceProvider {
 	{
 		$this->app->singleton('alert.environment', function($app)
 		{
-			return new Environment($app);
-		});
-
-		$this->app->bind('alert.collection', function($app)
-		{
-			return new AlertCollection($app);
+			return new Environment($app['session'], $app['config']);
 		});
 	}
 
