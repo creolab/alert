@@ -140,7 +140,16 @@ class Environment {
 		if ( ! $this->bag) $this->bag = new MessageBag();
 
 		// Get messges from flash
-		$flash = $this->session->get(self::SESSION_KEY);
+		$flash  = $this->session->get(self::SESSION_KEY);
+
+		// Add Laravel errors
+		if ($errors = $this->session->get('errors'))
+		{
+			foreach ($errors->all() as $error)
+			{
+				$this->bag->add('error', $error);
+			}
+		}
 
 		if ($flash)
 		{
